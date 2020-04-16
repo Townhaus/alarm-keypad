@@ -29,44 +29,8 @@
 #include <XPT2046.h>
 #include <Wire.h>
 #include <secrets.h>
-
-// Modify the following two lines to match your hardware
-// Also, update calibration parameters below, as necessary
-
-// For the esp shield, these are the default.
-#define TFT_DC 2
-#define TFT_CS 15
-
-#define BACKCOLOR 0x0000
-#define PRINTCOL 0xFFFF
-#define COLOR_RED 0xF800
-#define COLOR_GREEN 0x07E0
-#define COLOR_YELLOW 0xFFE0
-/******************* UI details */
-#define BUTTON_X 40
-#define BUTTON_Y 120
-#define BUTTON_W 76
-#define BUTTON_H 40
-#define BUTTON_SPACING_X 5
-#define BUTTON_SPACING_Y 5
-#define BUTTON_TEXTSIZE 2
-#define SCREEN_WIDTH 240
-#define SCREEN_HEIGHT 320
-
-// text box where numbers go
-#define TEXT_X 10
-#define TEXT_Y 15
-#define TEXT_W 230
-#define TEXT_H 35
-#define TEXT_TSIZE 2
-#define TEXT_TCOLOR 0xFFFF
-#define TEXT_LEN 6
-
-#define ALARM_UI_STATE 0
-#define ALARM_UI_STATE_LOADING 1
-#define HOME_HA_UI_STATE 2
-#define HOME_HA_UI_STATE_LOADING 3
-#define HOME_HA_BACK_BTN 14
+#include <constants.h>
+#include <utils.h>
 
 uint16_t uiState = ALARM_UI_STATE;
 
@@ -97,22 +61,6 @@ char buttonlabels[15][10] = {
 		"CLR",
 		"0",
 		char(31)};
-uint16_t buttoncolors[15] = {
-		BACKCOLOR,
-		BACKCOLOR,
-		BACKCOLOR,
-		BACKCOLOR,
-		BACKCOLOR,
-		BACKCOLOR,
-		BACKCOLOR,
-		BACKCOLOR,
-		BACKCOLOR,
-		BACKCOLOR,
-		BACKCOLOR,
-		BACKCOLOR,
-		BACKCOLOR,
-		BACKCOLOR,
-		BACKCOLOR};
 uint16_t buttonTextSize[15] = {2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2};
 
 Adafruit_ILI9341 tft = Adafruit_ILI9341(TFT_CS, TFT_DC);
@@ -129,39 +77,7 @@ String alarmStatus = "N/A";
 WiFiClient net;
 WiFiUDP ntpUDP;
 MQTTClient mqttClient;
-NTPClient timeClient(ntpUDP, "pool.ntp.org", -28800);
-
-void printTopic(uint8_t col, uint8_t row, String text, uint8_t xOffset = 0, String label = "")
-{
-	char textChar[30];
-	Serial.print(col);
-	Serial.print(",");
-	Serial.print(row);
-	Serial.print(" - ");
-	Serial.println(text);
-
-	tft.fillRect(
-			((TEXT_X) + col * (TEXT_W)) + xOffset,
-			TEXT_Y + row * (TEXT_H),
-			TEXT_W,
-			TEXT_Y,
-			BACKCOLOR);
-	tft.setTextColor(ILI9341_WHITE);
-	tft.setCursor(
-			((TEXT_X) + col * (TEXT_W)) + xOffset,
-			TEXT_Y + row * (TEXT_H));
-
-	tft.setTextSize(TEXT_TSIZE);
-	text.toCharArray(textChar, 30);
-	tft.print(textChar);
-
-	tft.setCursor(
-			((TEXT_X) + col * (TEXT_W)),
-			0 + row * (TEXT_H));
-	tft.setTextSize(1);
-	label.toCharArray(textChar, 30);
-	tft.print(textChar);
-}
+NTPClient timeClient(ntpUDP, "pool.ntp.org", -25200);
 
 void resetTextField()
 {
@@ -175,14 +91,14 @@ void resetTextField()
 
 	Serial.println(textfield);
 
-	printTopic(0, 1, textfield, 0);
+	Utils::printTopic(tft, 0, 1, textfield, 0, "");
 }
 
 void printAlarmStatus(uint8_t col, uint8_t row, String status)
 {
 	Serial.println("printAlarmStatus: " + status);
 	uint16_t color = COLOR_GREEN;
-	if (status == "armed_away" || status == "armed_home")
+	if (status == "armed away" || status == "armed home")
 	{
 		color = COLOR_RED;
 	}
@@ -190,7 +106,7 @@ void printAlarmStatus(uint8_t col, uint8_t row, String status)
 	{
 		color = COLOR_YELLOW;
 	}
-	printTopic(col, row, status, 20, "Alarm Status");
+	Utils::printTopic(tft, col, row, status, 20, "Alarm Status");
 	uint8_t x = (TEXT_X) + col * (TEXT_W);
 	uint8_t y = TEXT_Y + row * (TEXT_H);
 	tft.fillCircle(x + 5, y + 5, 7, color);
@@ -217,9 +133,9 @@ void messageReceived(String &topic, String &payload)
 	{
 		payload = payload + (char)247;
 		payload.toCharArray(exteriorTemp, 25);
-		if (uiState == 2)
+		if (uiState == HOME_HA_UI_STATE)
 		{
-			printTopic(0, 1, exteriorTemp, 0, "Exterior Temperature");
+			Utils::printTopic(tft, 0, 1, exteriorTemp, 0, "Exterior Temperature");
 		}
 	}
 
@@ -227,18 +143,18 @@ void messageReceived(String &topic, String &payload)
 	{
 		payload = payload + (char)247;
 		payload.toCharArray(foyerTemp, 25);
-		if (uiState == 2)
+		if (uiState == HOME_HA_UI_STATE)
 		{
-			printTopic(0, 2, foyerTemp, 0, "Foyer Temperature");
+			Utils::printTopic(tft, 0, 2, foyerTemp, 0, "Foyer Temperature");
 		}
 	}
 
 	if (topic == "/weather/exterior/summary")
 	{
 		payload.toCharArray(weatherSummary, 15);
-		if (uiState == 2)
+		if (uiState == HOME_HA_UI_STATE)
 		{
-			printTopic(0, 3, weatherSummary, 0, "Weather");
+			Utils::printTopic(tft, 0, 3, weatherSummary, 0, "Weather");
 		}
 	}
 
@@ -251,14 +167,16 @@ void messageReceived(String &topic, String &payload)
 		{
 			return;
 		}
+
+		tft.fillRect(
+				0,
+				TEXT_Y + 5 * (TEXT_H),
+				240,
+				200,
+				BACKCOLOR);
+
 		if (uiState == 2)
 		{
-			tft.fillRect(
-					((TEXT_X) + 0 * (TEXT_W)),
-					TEXT_Y + 5 * (TEXT_H),
-					TEXT_W,
-					70,
-					BACKCOLOR);
 			for (int i = 0; i <= sizeof(doc); i++)
 			{
 				const char *sensor = doc[i];
@@ -266,7 +184,7 @@ void messageReceived(String &topic, String &payload)
 				{
 					return;
 				}
-				printTopic(0, 5 + i, doc[i], 0, "Door");
+				Utils::printTopic(tft, 0, 5 + i, doc[i], 0, "Door");
 				Serial.println(sensor);
 			}
 		}
@@ -297,48 +215,25 @@ void connect()
 	mqttClient.subscribe("/weather/exterior/summary");
 }
 
-void createButton(uint8_t col, uint8_t row)
-{
-	buttons[col + row * 3].initButton(
-			&tft,
-			BUTTON_X + col * (BUTTON_W + BUTTON_SPACING_X),
-			BUTTON_Y + row * (BUTTON_H + BUTTON_SPACING_Y), // x, y, w, h, outline, fill, text
-			BUTTON_W,
-			BUTTON_H,
-			ILI9341_WHITE,
-			buttoncolors[col + row * 3],
-			ILI9341_WHITE,
-			buttonlabels[col + row * 3],
-			buttonTextSize[col + row * 3]);
-
-	buttons[col + row * 3].drawButton();
-}
-
 void setup()
 {
 	Serial.begin(9600);
-	SPI.setFrequency(ESP_SPI_FREQ);
 
 	tft.begin();
-	touch.begin(tft.width(), tft.height());
-
-	Serial.print("tftx =");
 	Serial.print(tft.width());
-	Serial.print(" tfty =");
 	Serial.println(tft.height());
 
 	tft.setRotation(0);
 	tft.fillScreen(BACKCOLOR);
-
+	touch.begin(tft.width(), tft.height());
 	// Replace these for your screen module
 	touch.setCalibration(1858, 265, 288, 1819);
 
-	// create buttons
 	for (uint8_t row = 0; row < 5; row++)
 	{
 		for (uint8_t col = 0; col < 3; col++)
 		{
-			createButton(col, row);
+			Utils::initButtons(buttonlabels, buttons, tft, col, row);
 		}
 	}
 
@@ -370,7 +265,7 @@ void loop()
 		timeNow = millis();
 		if (uiState == HOME_HA_UI_STATE_LOADING || uiState == HOME_HA_UI_STATE)
 		{
-			printTopic(0, 0, timeClient.getFormattedTime().substring(0, 5), 0, "Time");
+			Utils::printTopic(tft, 0, 0, timeClient.getFormattedTime().substring(0, 5), 0, "Time");
 		}
 	}
 
@@ -383,26 +278,27 @@ void loop()
 
 	if (uiState == HOME_HA_UI_STATE_LOADING)
 	{
+		mqttClient.publish("/alarm/get-status");
 		Serial.println("HOME_HA_UI_STATE_LOADING");
 		tft.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, ILI9341_BLACK);
 		char btnKey[5] = {'A', 'L', 'R', 'M'};
 		shouldShowKeypad.initButton(
 				&tft,
-				BUTTON_X + 2 * (BUTTON_W + BUTTON_SPACING_X),
-				BUTTON_Y + 4 * (BUTTON_H + BUTTON_SPACING_Y), // x, y, w, h, outline, fill, text
-				BUTTON_W,
-				BUTTON_H,
-				ILI9341_WHITE,
-				buttoncolors[1 + 1 * 3],
-				ILI9341_WHITE,
+				0,
+				0, // x, y, w, h, outline, fill, text
+				240,
+				320,
+				BACKCOLOR,
+				BACKCOLOR,
+				BACKCOLOR,
 				btnKey,
 				2);
 		shouldShowKeypad.drawButton();
 
-		printTopic(0, 0, timeClient.getFormattedTime().substring(0, 5), 0, "Time");
-		printTopic(0, 1, exteriorTemp, 0, "Exterior Temperature");
-		printTopic(0, 2, foyerTemp, 0, "Foyer Temperature");
-		printTopic(0, 3, weatherSummary, 0, "Weather");
+		Utils::printTopic(tft, 0, 0, timeClient.getFormattedTime().substring(0, 5), 0, "Time");
+		Utils::printTopic(tft, 0, 1, exteriorTemp, 0, "Exterior Temperature");
+		Utils::printTopic(tft, 0, 2, foyerTemp, 0, "Foyer Temperature");
+		Utils::printTopic(tft, 0, 3, weatherSummary, 0, "Weather");
 		printAlarmStatus(0, 4, alarmStatus);
 		uiState = HOME_HA_UI_STATE;
 	}
@@ -458,7 +354,6 @@ void loop()
 		{
 			if (buttons[b].justReleased())
 			{
-				// Serial.print("Released: "); Serial.println(b);
 				buttons[b].drawButton(); // draw normal
 			}
 
@@ -481,7 +376,7 @@ void loop()
 					}
 
 					Serial.println(textfield);
-					printTopic(0, 1, textfield, 0);
+					Utils::printTopic(tft, 0, 1, textfield, 0, "");
 
 					delay(300); // UI debouncing
 					buttons[b].press(false);
@@ -506,19 +401,16 @@ void loop()
 					}
 
 					Serial.println(textfield);
-					printTopic(0, 1, textfield, 0);
+					Utils::printTopic(tft, 0, 1, textfield, 0, "");
 
 					buttons[b].press(false);
 					delay(300); // UI debouncing
 					buttons[b].drawButton();
 				}
 
-				if (b == 2)
+				if (b == ALARM_UI_ARM_HOME_BTN)
 				{
-					Serial.print("Arming alarm, Code: ");
-					Serial.print(alarmCode);
 					mqttClient.publish("/alarm/action/arm-home", alarmCode);
-
 					resetTextField();
 				}
 
@@ -529,11 +421,8 @@ void loop()
 					uiState = HOME_HA_UI_STATE_LOADING;
 				}
 
-				if (b == 0)
+				if (b == ALARM_UI_DISARM_BTN)
 				{
-					Serial.print("Disarming alarm, Code:X");
-					Serial.print(alarmCode);
-					Serial.print("X");
 					mqttClient.publish("/alarm/action/disarm", alarmCode);
 					resetTextField();
 
